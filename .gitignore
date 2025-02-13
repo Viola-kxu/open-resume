@@ -33,3 +33,12 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# python virtual environment
+venv/
+.venv/
+env/
+.env/
+
+# ignore the following path:
+/Users/viola/Desktop/open-resume/venv

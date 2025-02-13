@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { readPdf } from "lib/parse-resume-from-pdf/read-pdf";
 import type { TextItems } from "lib/parse-resume-from-pdf/types";
+import type { Resume } from "lib/redux/types";
 import { groupTextItemsIntoLines } from "lib/parse-resume-from-pdf/group-text-items-into-lines";
 import { groupLinesIntoSections } from "lib/parse-resume-from-pdf/group-lines-into-sections";
 import { extractResumeFromSections } from "lib/parse-resume-from-pdf/extract-resume-from-sections";
@@ -39,16 +40,24 @@ const defaultFileUrl = RESUME_EXAMPLES[0]["fileUrl"];
 export default function ResumeParser() {
   const [fileUrl, setFileUrl] = useState(defaultFileUrl);
   const [textItems, setTextItems] = useState<TextItems>([]);
-  const lines = groupTextItemsIntoLines(textItems || []);
-  const sections = groupLinesIntoSections(lines);
-  const resume = extractResumeFromSections(sections);
+  const [resume, setResume] = useState<Resume | null>(null);
 
   useEffect(() => {
+    let mounted = true;
     async function test() {
       const textItems = await readPdf(fileUrl);
+      if (!mounted) return;
       setTextItems(textItems);
+      const lines = groupTextItemsIntoLines(textItems || []);
+      const sections = groupLinesIntoSections(lines);
+      const parsedResume = await extractResumeFromSections(sections);
+      if (!mounted) return;
+      setResume(parsedResume);
     }
     test();
+    return () => {
+      mounted = false;
+    };
   }, [fileUrl]);
 
   return (
@@ -120,8 +129,8 @@ export default function ResumeParser() {
             <ResumeTable resume={resume} />
             <ResumeParserAlgorithmArticle
               textItems={textItems}
-              lines={lines}
-              sections={sections}
+              lines={groupTextItemsIntoLines(textItems || [])}
+              sections={groupLinesIntoSections(groupTextItemsIntoLines(textItems || []))}
             />
             <div className="pt-24" />
           </section>

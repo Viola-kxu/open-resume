@@ -20,12 +20,12 @@ import { extractSkills } from "lib/parse-resume-from-pdf/extract-resume-from-sec
  * out for all text items within the section, and the text item with the highest computed
  * feature score is identified as the extracted resume attribute.
  */
-export const extractResumeFromSections = (
+export const extractResumeFromSections = async (
   sections: ResumeSectionToLines
-): Resume => {
+): Promise<Resume> => {
   const { profile } = extractProfile(sections);
   const { educations } = extractEducation(sections);
-  const { workExperiences } = extractWorkExperience(sections);
+  const { workExperiences } = await extractWorkExperience(sections);
   const { projects } = extractProject(sections);
   const { skills } = extractSkills(sections);
 

@@ -1,8 +1,10 @@
+import { analyzeTextWithSpacy } from '../nlp-processor';
 import type { ResumeWorkExperience } from "lib/redux/types";
 import type {
   TextItem,
   FeatureSet,
   ResumeSectionToLines,
+  NLPInput,
 } from "lib/parse-resume-from-pdf/types";
 import { getSectionLinesByKeywords } from "lib/parse-resume-from-pdf/extract-resume-from-sections/lib/get-section-lines";
 import {
@@ -17,6 +19,7 @@ import {
   getBulletPointsFromLines,
   getDescriptionsLineIdx,
 } from "lib/parse-resume-from-pdf/extract-resume-from-sections/lib/bullet-points";
+import { useMemo } from 'react';
 
 // prettier-ignore
 const WORK_EXPERIENCE_KEYWORDS_LOWERCASE = ['work', 'experience', 'employment', 'history', 'job'];
@@ -34,50 +37,107 @@ const JOB_TITLE_FEATURE_SET: FeatureSet[] = [
   [hasMoreThan5Words, -2],
 ];
 
-export const extractWorkExperience = (sections: ResumeSectionToLines) => {
+export const extractWorkExperience = async (sections: ResumeSectionToLines) => {
   const workExperiences: ResumeWorkExperience[] = [];
   const workExperiencesScores = [];
   const lines = getSectionLinesByKeywords(
     sections,
-    WORK_EXPERIENCE_KEYWORDS_LOWERCASE
+    ["experience", "work", "employment"]
   );
+  
+  // Only analyze if we have work experience content
+  if (lines.length === 0) {
+    return { workExperiences: [], workExperiencesScores: [] };
+  }
+
+  console.log('Full work experience section:', lines);
+
+  // Make a single NLP call for the entire work experience section
+  const nlpInput: NLPInput = {
+    text: lines.flat().map(item => item.text).join(' '),
+    textItems: lines.flat().map(item => ({
+      text: item.text,
+      x: item.x,
+      y: item.y,
+      fontName: item.fontName,
+      isBold: item.fontName.toLowerCase().includes('bold')
+    })),
+    sectionName: 'work_experience',
+    lineIndex: lines[0]?.[0]?.lineIndex ?? 0
+  };
+  
+  // Cache NLP results
+  const nlpResult = await analyzeTextWithSpacy(nlpInput);
+  console.log('NLP Analysis completed for work experience section');
+
   const subsections = divideSectionIntoSubsections(lines);
 
   for (const subsectionLines of subsections) {
     const descriptionsLineIdx = getDescriptionsLineIdx(subsectionLines) ?? 2;
 
-    const subsectionInfoTextItems = subsectionLines
-      .slice(0, descriptionsLineIdx)
-      .flat();
-    const [date, dateScores] = getTextWithHighestFeatureScore(
-      subsectionInfoTextItems,
-      DATE_FEATURE_SETS
-    );
-    const [jobTitle, jobTitleScores] = getTextWithHighestFeatureScore(
-      subsectionInfoTextItems,
-      JOB_TITLE_FEATURE_SET
-    );
-    const COMPANY_FEATURE_SET: FeatureSet[] = [
-      [isBold, 2],
-      [getHasText(date), -4],
-      [getHasText(jobTitle), -4],
-    ];
-    const [company, companyScores] = getTextWithHighestFeatureScore(
-      subsectionInfoTextItems,
-      COMPANY_FEATURE_SET,
-      false
-    );
+    // Extract company and job title using NLP entities
+    let company = '';
+    let jobTitle = '';
+    let date = '';
 
-    const subsectionDescriptionsLines =
-      subsectionLines.slice(descriptionsLineIdx);
+    for (const entity of nlpResult.entities) {
+      if (entity.label === 'ORG') {
+        company = entity.text;
+        console.log('Found company:', company);
+      } else if (entity.label === 'WORK_OF_ART' || entity.label === 'TITLE') {
+        jobTitle = entity.text;
+        console.log('Found job title:', jobTitle);
+      } else if (entity.label === 'DATE') {
+        date = entity.text;
+        console.log('Found date:', date);
+      }
+    }
+
+    // Fallback to original feature scoring system if NLP fails
+    if (!company || !jobTitle) {
+      console.log('Falling back to feature scoring system');
+      const subsectionInfoTextItems = subsectionLines
+        .slice(0, descriptionsLineIdx)
+        .flat();
+
+      if (!date) {
+        const [dateResult, dateScores] = getTextWithHighestFeatureScore(
+          subsectionInfoTextItems,
+          DATE_FEATURE_SETS
+        );
+        date = dateResult;
+      }
+
+      if (!jobTitle) {
+        const [jobTitleResult, jobTitleScores] = getTextWithHighestFeatureScore(
+          subsectionInfoTextItems,
+          JOB_TITLE_FEATURE_SET
+        );
+        jobTitle = jobTitleResult;
+      }
+
+      if (!company) {
+        const COMPANY_FEATURE_SET: FeatureSet[] = [
+          [isBold, 2],
+          [getHasText(date), -4],
+          [getHasText(jobTitle), -4],
+        ];
+        const [companyResult, companyScores] = getTextWithHighestFeatureScore(
+          subsectionInfoTextItems,
+          COMPANY_FEATURE_SET,
+          false
+        );
+        company = companyResult;
+      }
+    }
+
+    const subsectionDescriptionsLines = subsectionLines.slice(descriptionsLineIdx);
     const descriptions = getBulletPointsFromLines(subsectionDescriptionsLines);
 
     workExperiences.push({ company, jobTitle, date, descriptions });
-    workExperiencesScores.push({
-      companyScores,
-      jobTitleScores,
-      dateScores,
-    });
+    console.log('Final extracted work experience:', 
+      { company, jobTitle, date, descriptions });
   }
-  return { workExperiences, workExperiencesScores };
+
+  return { workExperiences };
 };

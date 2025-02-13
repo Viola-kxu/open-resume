@@ -8,6 +8,7 @@ export interface TextItem {
   height: number;
   fontName: string;
   hasEOL: boolean;
+  lineIndex?: number;
 }
 export type TextItems = TextItem[];
 
@@ -35,3 +36,18 @@ export interface TextScore {
   match: boolean;
 }
 export type TextScores = TextScore[];
+
+export interface TextWithPosition {
+  text: string;
+  x: number;
+  y: number;
+  fontName: string;
+  isBold: boolean;
+}
+
+export interface NLPInput {
+  text: string;
+  textItems: TextWithPosition[];
+  sectionName: string;
+  lineIndex: number;
+}
