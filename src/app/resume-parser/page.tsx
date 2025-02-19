@@ -12,6 +12,7 @@ import { Heading, Link, Paragraph } from "components/documentation";
 import { ResumeTable } from "resume-parser/ResumeTable";
 import { FlexboxSpacer } from "components/FlexboxSpacer";
 import { ResumeParserAlgorithmArticle } from "resume-parser/ResumeParserAlgorithmArticle";
+import { saveResume } from '../actions/save-resume';
 
 const RESUME_EXAMPLES = [
   {
@@ -37,6 +38,7 @@ const RESUME_EXAMPLES = [
 ];
 
 const defaultFileUrl = RESUME_EXAMPLES[0]["fileUrl"];
+
 export default function ResumeParser() {
   const [fileUrl, setFileUrl] = useState(defaultFileUrl);
   const [textItems, setTextItems] = useState<TextItems>([]);
@@ -53,6 +55,16 @@ export default function ResumeParser() {
       const parsedResume = await extractResumeFromSections(sections);
       if (!mounted) return;
       setResume(parsedResume);
+      
+      // Save the parsed resume to database
+      if (parsedResume) {
+        try {
+          const resumeId = await saveResume(parsedResume);
+          console.log('Resume saved to database:', resumeId);
+        } catch (error) {
+          console.error('Error saving resume to database:', error);
+        }
+      }
     }
     test();
     return () => {
