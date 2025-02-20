@@ -13,6 +13,12 @@ document.addEventListener('DOMContentLoaded', () => {
       const tab = await getCurrentTab();
       statusDiv.textContent = 'Getting form data...';
 
+      // First ensure the content script is loaded
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['scripts/content.js']
+      }).catch(err => console.log('Content script already loaded'));
+
       const response = await fetch('http://localhost:8000/api/fill-form', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -24,13 +30,21 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       const result = await response.json();
-      // Send data to content script
-      chrome.tabs.sendMessage(tab.id, {
-        action: "fillForm",
-        userData: result.userData  // Add this to your backend response
-      });
+      
+      // Add timeout to ensure content script is ready
+      setTimeout(async () => {
+        try {
+          await chrome.tabs.sendMessage(tab.id, {
+            action: "fillForm",
+            userData: result.userData
+          });
+          statusDiv.textContent = 'Form filled successfully!';
+        } catch (error) {
+          console.error('Message sending error:', error);
+          statusDiv.textContent = `Error: ${error.message}`;
+        }
+      }, 100);
 
-      statusDiv.textContent = 'Form filled successfully!';
     } catch (error) {
       console.error('Error:', error);
       statusDiv.textContent = `Error: ${error.message}`;
